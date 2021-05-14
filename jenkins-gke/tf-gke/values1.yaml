@@ -1,0 +1,140 @@
+controller:
+  # the 'name' and 'keyName' are concatenated with a '-' in between, so for example:
+  # an existing secret "secret-credentials" and a key inside it named "github-password" should be used in Jcasc as ${secret-credentials-github-password}
+  # 'name' and 'keyName' must be lowercase RFC 1123 label must consist of lower case alphanumeric characters or '-',
+  # and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc')
+  additionalExistingSecrets:
+    - name: jenkins-k8s-config
+      keyName: project_id
+    #${jenkins-k8s-config-project_id}
+    - name: github-secrets
+      keyName: github_repo
+   #${github-secrets-github_repo}
+    - name: github-secrets
+      keyName: github_username
+   #${github-secrets-github_username}
+    - name: github-secrets
+      keyName: github_token
+   #${github-secrets-github_token}
+    - name: jenkins-k8s-config
+      keyName: jenkins_tf_ksa
+   #${jenkins-k8s-config-jenkins_tf_ksa}
+  
+ 
+  servicePort: 80
+  serviceType: LoadBalancer
+  installPlugins:
+    - kubernetes:1.29.2
+    - workflow-aggregator:2.6
+    - git:4.7.1
+    - configuration-as-code:1.47
+    - workflow-job:latest
+    - credentials-binding:latest
+    - blueocean:latest
+    - docker-custom-build-environment:latest
+    - credentials:latest
+    - docker-commons:latest
+    - docker-workflow:latest
+    - job-dsl:latest
+    - jdk-tool:latest  
+  JCasC:
+    enabled: true
+    configScripts:
+        cloud: |
+            jenkins:
+                clouds:
+                    - kubernetes:
+                        name: "gke-executors"
+                        serverUrl: "https://kubernetes.default"
+                        jenkinsTunnel: "jenkins-agent:50000"
+                        jenkinsUrl: "http://jenkins:80"
+                        skipTlsVerify: true
+                        namespace: "default"
+                        templates:
+                            - name: "jenkins-jnlp"
+                              namespace: "default"
+                              nodeUsageMode: NORMAL
+                              label: "jnlp-exec"
+                              containers:
+                                - name: "jnlp"
+                                  image: "jenkins/jnlp-slave"
+                                  alwaysPullImage: false
+                                  workingDir: "/home/jenkins/agent"
+                                  ttyEnabled: true
+                                  command: ""
+                                  args: ""
+                                  resourceRequestCpu: "500m"
+                                  resourceLimitCpu: "1000m"
+                                  resourceRequestMemory: "1Gi"
+                                  resourceLimitMemory: "2Gi"
+                              volumes:
+                                - emptyDirVolume:
+                                    memory: false
+                                    mountPath: "/tmp"
+                              idleMinutes: "1"
+                              activeDeadlineSeconds: "120"
+                              slaveConnectTimeout: "1000"
+                            - name: "terraform"
+                              namespace: "default"
+                              nodeUsageMode: NORMAL
+                              serviceAccount: ${jenkins-k8s-config-jenkins_tf_ksa}
+                              label: "terraform-exec"
+                              containers:
+                                - name: "terraform"
+                                  image: "hashicorp/terraform:0.12.29"
+                                  alwaysPullImage: false
+                                  workingDir: "/home/jenkins/agent"
+                                  ttyEnabled: true
+                                  command: "/bin/sh -c"
+                                  args: "cat"
+                                  resourceRequestCpu: "200m"
+                                  resourceLimitCpu: "700m"
+                                  resourceRequestMemory: "500Mi"
+                                  resourceLimitMemory: "1Gi"
+                              volumes:
+                                - emptyDirVolume:
+                                    memory: false
+                                    mountPath: "/tmp"
+                              podRetention: "never"
+                              activeDeadlineSeconds: "300"
+                              slaveConnectTimeout: "1000"
+        credentials: |
+            credentials:
+                system:
+                    domainCredentials:
+                    - credentials:
+                        - usernamePassword:
+                            scope: GLOBAL
+                            id: "github-token"
+                            username: ${github-secrets-github_username}
+                            password: ${github-secrets-github_token}
+                            description: "Github personal token"
+        init-jobs: |
+            jobs:
+              - script: >
+                    multibranchPipelineJob('terraform-jenkins-create-demo') {
+                        factory {
+                        workflowBranchProjectFactory {
+                            scriptPath('example-pipelines/environments/Jenkinsfile')
+                        }
+                        }
+                        branchSources {
+                        github {
+                            id('12312313')
+                            scanCredentialsId('github-token')
+                            repoOwner("${github-secrets-github_username}")
+                            repository("${github-secrets-github_repo}")
+                            buildOriginBranch(true)
+                            buildOriginPRMerge(true)
+                            includes("dev prod PR*")
+                        }
+                        }
+                        orphanedItemStrategy {
+                        discardOldItems {
+                            numToKeep(10)
+                        }
+                        }
+                        triggers {
+                        periodic(1)
+                        }
+                    }
