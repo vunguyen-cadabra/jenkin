@@ -1,9 +1,9 @@
 
 
-project_id = "race-cicd-jenkins"
-tfstate_gcs_backend = "race-cicd-jenkins-tfstate"
-region = "us-central1"
-zones = ["us-central1-a"]
+project_id = "race-jenkins-test"
+tfstate_gcs_backend = "race-jenkins-test-tfstate"
+region = "asia-northeast1"
+zones = ["asia-northeast1-a"]
 ip_range_pods_name = "ip-range-pods"
 ip_range_services_name = "ip-range-scv"
 network_name = "jenkins-network"

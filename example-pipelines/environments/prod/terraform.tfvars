@@ -1,5 +1,5 @@
-project_id = "race-cicd-jenkins"
+project_id = "race-jenkins-test"
 environment = "prod"
-subnet1_region = "us-central1"
-subnet1_zone = "us-central1-a"
+subnet1_region = "asia-northeast1"
+subnet1_zone = "asia-northeast1-a"
 subnet1_cidr = "10.20.0.0/16"
